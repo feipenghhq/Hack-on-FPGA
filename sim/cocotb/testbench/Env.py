@@ -1,0 +1,79 @@
+# -------------------------------------------------------------------
+# Copyright 2025 by Heqing Huang (feipenghhq@gamil.com)
+# -------------------------------------------------------------------
+#
+# Project: Hack on FPGA
+# Author: Heqing Huang
+# Date Created: 06/13/2025
+#
+# -------------------------------------------------------------------
+# Environment Class
+# -------------------------------------------------------------------
+
+import cocotb
+from cocotb.triggers import FallingEdge, RisingEdge, Timer
+from cocotb.clock import Clock
+
+class Env():
+
+    def __init__(self, dut):
+        self.dut = dut
+        self.rom = dut.u_instruction_rom.ram
+        self.ram = dut.u_data_ram.ram
+
+        self.period = 10            # clock period
+        self.fill_addition = 10     # fill addition rom to be 0
+
+    def load_rom(self, file:str):
+        """
+        Load the Hack ROM
+        """
+        with open(file, 'r') as rom:
+            lines = rom.readlines()
+            for i in range(len(lines)):
+                self.rom[i].value = int(lines[i].strip(), 2)
+            for i in range(len(lines), len(lines) + self.fill_addition):
+                self.rom[i].value = 0
+
+    def set_ram(self, addr:int, value:int):
+        """
+        Set the Hack ram: RAM[addr] = value
+        """
+        self.ram[addr].value = value
+
+    def compare_ram(self, golden:dict):
+        """
+        Compare Hack RAM with golden result
+
+        Args:
+            golden (dict): Hash table representing the expected memory data {addr:value}
+        """
+        for (addr, value) in golden.items():
+            actual = self.ram[addr].value.integer
+            assert actual == value, f"Wrong memory content on address {addr}. Expecting {value} but get {actual}"
+
+    async def generate_reset(self):
+        """
+        Generate reset pulses.
+        """
+        self.dut.reset.value = 1
+        await Timer(5, units="ns")
+        self.dut.reset.value = 0
+        await RisingEdge(self.dut.clk)
+
+    async def init(self, file:str):
+        """
+        Initialize the environment: setup clock, load the hack rom and reset the design
+        """
+        self.load_rom(file)
+        cocotb.start_soon(Clock(self.dut.clk, self.period, units = 'ns').start()) # clock
+        await self.generate_reset()
+
+    async def run(self, file:str, golden:dict, cycle:int=0):
+        """
+        run the test flow and compare with the golden ram result
+        """
+        await self.init(file)
+        if cycle:
+            await Timer(cycle * self.period, units = 'ns')
+        self.compare_ram(golden)
