@@ -1,6 +1,6 @@
 # Makefile for compiling RTL
 
-REPO = $(shell git rev-parse --show-toplevel)
+REPO := $(shell git rev-parse --show-toplevel)
 
 # SystemVerilog Source File
 SV_SRC = $(shell find $$PWD -name "*.sv")

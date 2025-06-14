@@ -84,12 +84,12 @@ u_hack_cpu(
 assign data_sel   = addressM < DATA_ADDR_END;
 assign data_wdata = outM;
 assign data_addr  = addressM;
-assign data_write = writeM & screen_sel;
+assign data_write = writeM & data_sel;
 
 assign screen_sel     = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
 assign screen_wdata   = outM;
 assign screen_addr    = addressM;
-assign screen_write   = writeM & data_sel;
+assign screen_write   = writeM & screen_sel;
 
 assign keyboard_sel       = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;
 
