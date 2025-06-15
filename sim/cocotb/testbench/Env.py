@@ -20,6 +20,8 @@ class Env():
         self.dut = dut
         self.rom = dut.u_instruction_rom.ram
         self.ram = dut.u_data_ram.ram
+        self.pc = dut.u_hack_cpu.pc
+        self.commit = dut.u_hack_cpu.commit
 
         self.period = 10            # clock period
         self.fill_addition = 10     # fill addition rom to be 0
@@ -49,8 +51,13 @@ class Env():
             golden (dict): Hash table representing the expected memory data {addr:value}
         """
         for (addr, value) in golden.items():
-            actual = self.ram[addr].value.integer
+            try:
+                actual = self.ram[addr].value.integer
+            except ValueError as e:
+                self.dut._log.error(f"ValueError. Expecting {value} at address {addr}")
+                raise e
             assert actual == value, f"Wrong memory content on address {addr}. Expecting {value} but get {actual}"
+
 
     async def generate_reset(self):
         """
@@ -77,3 +84,16 @@ class Env():
         if cycle:
             await Timer(cycle * self.period, units = 'ns')
         self.compare_ram(golden)
+
+    async def debug_mem_print(self, name:str, addr:int, pc_range:range):
+        """Print RAM[addr] in given PC range
+
+        Args:
+            name (str): Variable associated with this RAM address
+            addr (int): RAM address
+            pc_range (range): PC Range
+        """
+        while True:
+            await FallingEdge(self.dut.clk)
+            if self.pc.value.integer in pc_range and self.commit.value.integer:
+                print(f"PC = {self.pc.value.integer}: {name} (ram[{addr}]) = {self.ram[addr].value.integer}")
