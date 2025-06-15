@@ -70,39 +70,27 @@ This have two impact on the current Hack CPU design:
 
 The original Hack CPU design needs to be modified to accommodate the above impacts.
 
-#### Instruction Fetch
+#### CPU Control State Machine
 
-There is no explicit change required for instruction fetch logic using synchronous RAM. The instruction will return in
-tne next clock cycle. The current PC value in PC register indicate the address of next instruction to be fetched.
+In order to solve the above issue, we will use a state machine to control the CPU and make it a "multi-cycle" CPU.
 
-![Instruction Fetch](./docs/waves/Instruction_Fetch.png)
+The CPU contains 3 states IDLE, Fetch, and EXEC:
 
+| State | Meaning                            |
+| ----- | ---------------------------------- |
+| IDLE  | CPU under reset                    |
+| FETCH | Fetch the instruction from the ROM |
+| EXEC  | Execute the instruction            |
 
-#### Memory Read
+For Instruction Fetch, CPU will access the Instruction ROM in the *FETCH* state and the instruction will come back at
+*EXEC* stage. CPU can start executing the instruction in *EXEC* stage.
 
-With synchronous RAM, memory read will take 2 clock cycles. Since the A register is updated at the end of current clock,
-if the next instruction involves memory read (for example `D=M`), the read data will not be available at this clock.
+For Memory Read, since the A register is updated to the new value at the beginning of the *FETCH* state, this will set
+the RAM address to a new value and start accessing the RAM implicitly. When CPU switch to *EXEC* stage, the read data
+will be available at RAM output.
 
-In order to overcome is gap, we make the instruction that involves memory read from 1 clock cycle to 2 clock cycle and
-introduces a state machine to control the cpu.
-
-The state machine contains 2 states: EXECUTE, MEM_READ. When the current instruction requires a memory read, we stall
-the CPU for one clock cycle and wait for the read data to come back in the next cycle.
-
-| State    | Meaning                              |
-| -------- | ------------------------------------ |
-| EXECUTE  | Execute instructions or read memory  |
-| MEM_READ | Use memory read data for calculation |
-
-However, this create another issue regarding the instruction. When previous instruction completes, the PC value will be
-update to the address of next instruction. When we enter EXECUTE state for the next instruction, the CPU will fetch the next instruction from instruction rom and the new instruction will return at MEM_READ state. This will interfere with
-the current instruction.
-
-![Instruction Fetch Stall Mismatch](./docs/waves/Instruction_Fetch_Stall_0.png)
-
-At cycle 7, instruction will change to instruction2 instead of keeping as instruction1.
-
-In order to fix the issue, we add retention register to keep the current instruction and use a MUX to select it.
+This solution only works when the memory has a **FIXED 1 CYCLE READ LATENCY**. If the read latency is more then 1 cycle
+or arbitrary, then a new solution will be needed.
 
 ## Supported FPGA Boards
 

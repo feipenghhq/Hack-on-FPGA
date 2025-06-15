@@ -51,11 +51,11 @@ logic               alu_zr;
 
 logic               condition;
 
-localparam          EXECUTE = 0;
-localparam          MEM_READ = 1;
-logic               state;
-logic               stall;
-logic [WIDTH-1:0]   inst_mux;   // instruction after the instruction MUX
+localparam          IDLE  = 0;
+localparam          FETCH = 1;
+localparam          EXEC  = 2;
+logic [1:0]         state;
+logic               commit;
 
 /////////////////////////////////////////////////
 // Logic
@@ -71,28 +71,29 @@ C-instruction format
 Note: this representation use big-endian.
 */
 
-assign opcode = inst_mux[15];
-assign comp   = inst_mux[11:6];
-assign dest   = inst_mux[5:3];
-assign jump   = inst_mux[2:0];
-assign isM    = inst_mux[12];
+assign opcode = instruction[15];
+assign comp   = instruction[11:6];
+assign dest   = instruction[5:3];
+assign jump   = instruction[2:0];
+assign isM    = instruction[12];
 assign isA    = opcode == 0;
 assign isC    = opcode == 1;
 
 // CPU Control State Machine
 always @(posedge clk or posedge reset) begin
     if (reset) begin
-        state <= EXECUTE;
+        state <= IDLE;
     end
     else begin
         case (state)
-            EXECUTE: if (isM) state <= MEM_READ;
-            MEM_READ: state <= EXECUTE;
+            IDLE:  state <= FETCH;
+            FETCH: state <= EXEC;
+            EXEC:  state <= FETCH;
         endcase
     end
 end
 
-assign stall = (state == EXECUTE) & isM;    // stall the cpu while waiting for the memory read data
+assign commit = (state == EXEC) ? 1'b1 : 1'b0;              // complete in EXEC1 state
 
 // PC
 always @(posedge clk or posedge reset) begin
@@ -100,7 +101,7 @@ always @(posedge clk or posedge reset) begin
         pc <= 0;
     end
     else begin
-        if (!stall) begin
+        if (commit) begin
             if (condition && isC) begin
                 pc <= A_reg;
             end
@@ -113,9 +114,9 @@ end
 
 // A Reg
 always @(posedge clk) begin
-    if (!stall) begin
+    if (commit) begin
         if (isA) begin
-            A_reg <= inst_mux;
+            A_reg <= instruction;
         end
         else if (dest[2] == 1) begin
             A_reg <= alu_out;
@@ -125,8 +126,8 @@ end
 
 // D Reg
 always @(posedge clk) begin
-    if (!stall) begin
-        if (dest[1] == 1) begin
+    if (commit) begin
+        if (isC && (dest[1] == 1)) begin
             D_reg <= alu_out;
         end
     end
@@ -134,13 +135,10 @@ end
 
 // I Reg
 always @(posedge clk) begin
-    if (stall) begin
+    if (commit) begin
         I_reg <= instruction;
     end
 end
-
-// Instruction Mux
-assign inst_mux = (state == MEM_READ) ? I_reg : instruction;
 
 // Jump Check
 assign condition =
@@ -154,7 +152,7 @@ assign condition =
 
 // Memory Output
 assign outM = alu_out;
-assign writeM = isC & dest[0] & ~stall;
+assign writeM = isC & dest[0] & commit;
 assign addressM = A_reg;
 
 // ALU
@@ -170,6 +168,5 @@ u_hack_alu (
     .zr     (alu_zr),
     .ng     (alu_ng)
 );
-
 
 endmodule
