@@ -31,7 +31,6 @@ module hack_cpu #(
 // Register
 logic [WIDTH-1:0]   A_reg;
 logic [WIDTH-1:0]   D_reg;
-logic [WIDTH-1:0]   I_reg;
 
 // Instruction Field
 logic               opcode;
@@ -80,7 +79,7 @@ assign isA    = opcode == 0;
 assign isC    = opcode == 1;
 
 // CPU Control State Machine
-always @(posedge clk or posedge reset) begin
+always @(posedge clk) begin
     if (reset) begin
         state <= IDLE;
     end
@@ -96,7 +95,7 @@ end
 assign commit = (state == EXEC) ? 1'b1 : 1'b0;              // complete in EXEC1 state
 
 // PC
-always @(posedge clk or posedge reset) begin
+always @(posedge clk) begin
     if (reset) begin
         pc <= 0;
     end
@@ -130,13 +129,6 @@ always @(posedge clk) begin
         if (isC && (dest[1] == 1)) begin
             D_reg <= alu_out;
         end
-    end
-end
-
-// I Reg
-always @(posedge clk) begin
-    if (commit) begin
-        I_reg <= instruction;
     end
 end
 

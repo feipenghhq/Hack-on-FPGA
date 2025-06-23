@@ -8,6 +8,7 @@ TOPLEVEL_LANG ?= verilog
 WAVES = 1
 
 VERILOG_SOURCES += $(shell find $(REPO)/rtl -name "*.sv")
+VERILOG_INCLUDE_DIRS += $(shell dirname $(shell find $(REPO)/rtl -name "*.svh"))
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = hack_top

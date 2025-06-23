@@ -11,14 +11,22 @@
 // -------------------------------------------------------------------
 
 module hack_top #(
-    parameter WIDTH = 16,   // data width
-    parameter I_AW = 16,    // instruction rom address width
-    parameter D_AW = 16,    // data ram address width
-    parameter S_AW = 16     // screen ram address width
+    parameter RGB_WIDTH = 10,   // RGB width
+    parameter WIDTH = 16,       // data width
+    parameter I_AW = 16,        // instruction rom address width
+    parameter D_AW = 16,        // data ram address width
+    parameter S_AW = 16         // screen ram address width
 )
 (
-    input logic         clk,
-    input logic         reset,
+    input logic                     clk,    // Need to be 27.175 as pixel clock use the same clock
+    input logic                     reset,
+
+    // vga output
+    output logic                    hsync,
+    output logic                    vsync,
+    output logic [RGB_WIDTH-1:0]    r,
+    output logic [RGB_WIDTH-1:0]    g,
+    output logic [RGB_WIDTH-1:0]    b,
 
     // error reporting
     output logic        invalid_addressM        // invalid memory address
@@ -55,6 +63,8 @@ logic [WIDTH-1:0]    screen_addr;
 logic [WIDTH-1:0]    screen_wdata;
 logic                screen_write;
 logic [WIDTH-1:0]    screen_rdata;
+logic [WIDTH-1:0]    vga_addr;
+logic [WIDTH-1:0]    vga_rdata;
 
 // Keyboard
 logic                keyboard_sel;
@@ -104,6 +114,20 @@ assign inM = ({WIDTH{read_data_sel[0]}} & keyboard_rdata) |
              ({WIDTH{read_data_sel[2]}} & data_rdata);
 
 
+// VGA controller
+hack_vga_top #(.RGB_WIDTH(RGB_WIDTH))
+u_hack_vga_top (
+    .pixel_clk  (clk),
+    .reset      (reset),
+    .hsync      (hsync),
+    .vsync      (vsync),
+    .r          (r),
+    .g          (g),
+    .b          (b),
+    .ram_addr   (vga_addr),
+    .ram_rdata  (vga_rdata)
+);
+
 // Instruction ROM
 ram_1rw #(
     .DW(WIDTH),
@@ -144,11 +168,11 @@ u_screen_ram(
     .wdata_a    (screen_wdata),
     .rdata_a    (screen_rdata),
     // port b - vga access - TBD
-    .addr_b     (16'b0),
+    .addr_b     (vga_addr),
     .write_b    (1'b0),
     .wdata_b    (16'b0),
     /* verilator lint_off PINCONNECTEMPTY */
-    .rdata_b    ()
+    .rdata_b    (vga_rdata)
     /* verilator lint_on PINCONNECTEMPTY */
 );
 
