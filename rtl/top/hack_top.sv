@@ -98,7 +98,7 @@ assign data_write = writeM & data_sel;
 
 assign screen_sel     = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
 assign screen_wdata   = outM;
-assign screen_addr    = addressM;
+assign screen_addr    = addressM - SCREEN_ADDR_START;
 assign screen_write   = writeM & screen_sel;
 
 assign keyboard_sel       = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;

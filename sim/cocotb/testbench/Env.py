@@ -14,12 +14,15 @@ import cocotb
 from cocotb.triggers import FallingEdge, RisingEdge, Timer
 from cocotb.clock import Clock
 
+from vga import VGA
+
 class Env():
 
     def __init__(self, dut):
         self.dut = dut
         self.rom = dut.u_instruction_rom.ram
         self.ram = dut.u_data_ram.ram
+        self.vram = dut.u_screen_ram.ram
         self.pc = dut.u_hack_cpu.pc
         self.commit = dut.u_hack_cpu.commit
 
@@ -75,6 +78,7 @@ class Env():
         self.load_rom(file)
         cocotb.start_soon(Clock(self.dut.clk, self.period, units = 'ns').start()) # clock
         await self.generate_reset()
+        self.fill_vram()
 
     async def run(self, file:str, golden:dict, cycle:int=0):
         """
@@ -84,6 +88,32 @@ class Env():
         if cycle:
             await Timer(cycle * self.period, units = 'ns')
         self.compare_ram(golden)
+
+    def fill_vram(self):
+        """
+        Fill vram with 0
+        """
+        size = 1 << 16 # 2^16
+        for i in range(size):
+            self.vram[i].value = 0
+
+    def print_vram(self):
+        print(self.ram[0].value)
+        print(self.ram[1].value)
+        print(self.ram[2].value)
+
+    async def run_screen(self, file:str):
+        """
+        run the test flow with screen
+        """
+        self.fill_vram()
+        await self.init(file)
+        vga = VGA()
+        vga.set_vga_signal(self.dut.clk, self.dut.hsync, self.dut.vsync, self.dut.r, self.dut.g, self.dut.b)
+        vga.start_display()
+        cocotb.start_soon(vga.monitor_vga())
+        while not vga.quit:
+            await Timer(10000, units = 'ns')
 
     async def debug_mem_print(self, name:str, addr:int, pc_range:range):
         """Print RAM[addr] in given PC range
