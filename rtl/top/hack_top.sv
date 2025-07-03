@@ -13,9 +13,9 @@
 module hack_top #(
     parameter RGB_WIDTH = 10,   // RGB width
     parameter WIDTH = 16,       // data width
-    parameter I_AW = 16,        // instruction rom address width
-    parameter D_AW = 16,        // data ram address width
-    parameter S_AW = 16         // screen ram address width
+    parameter I_AW = WIDTH,     // instruction rom address width
+    parameter D_AW = 14,        // data ram address width
+    parameter S_AW = 8          // screen ram address width
 )
 (
     input logic                     clk,    // Need to be 27.175 as pixel clock use the same clock
@@ -27,6 +27,17 @@ module hack_top #(
     output logic [RGB_WIDTH-1:0]    r,
     output logic [RGB_WIDTH-1:0]    g,
     output logic [RGB_WIDTH-1:0]    b,
+
+    `ifdef SRAM
+    // SRAM Interface
+    inout  [15:0]                   sram_dq,     // SRAM Data bus 16 Bits
+    output [17:0]                   sram_addr,   // SRAM Address bus 18 Bits
+    output                          sram_ub_n,   // SRAM High-byte Data Mask
+    output                          sram_lb_n,   // SRAM Low-byte Data Mask
+    output                          sram_we_n,   // SRAM Write Enable
+    output                          sram_ce_n,   // SRAM Chip Enable
+    output                          sram_oe_n,   // SRAM Output Enable
+    `endif
 
     // error reporting
     output logic        invalid_addressM        // invalid memory address
@@ -52,14 +63,14 @@ logic                writeM;
 
 // Data RAM
 logic                data_sel;
-logic [WIDTH-1:0]    data_addr;
+logic [D_AW-1:0]     data_addr;     // data ram size is 16384
 logic [WIDTH-1:0]    data_wdata;
 logic                data_write;
 logic [WIDTH-1:0]    data_rdata;
 
 // Screen RAM
 logic                screen_sel;
-logic [WIDTH-1:0]    screen_addr;
+logic [S_AW-1:0]     screen_addr;   // screen ram size is 8196
 logic [WIDTH-1:0]    screen_wdata;
 logic                screen_write;
 logic [WIDTH-1:0]    screen_rdata;
@@ -93,12 +104,12 @@ u_hack_cpu(
 // Data Bus Decode
 assign data_sel   = addressM < DATA_ADDR_END;
 assign data_wdata = outM;
-assign data_addr  = addressM;
+assign data_addr  = addressM[13:0];
 assign data_write = writeM & data_sel;
 
 assign screen_sel     = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
 assign screen_wdata   = outM;
-assign screen_addr    = addressM - SCREEN_ADDR_START;
+assign screen_addr    = (addressM - SCREEN_ADDR_START);
 assign screen_write   = writeM & screen_sel;
 
 assign keyboard_sel       = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;
@@ -129,6 +140,29 @@ u_hack_vga_top (
 );
 
 // Instruction ROM
+`ifdef SRAM // Using onboard SRAM as instruction rom.
+sram_ctrl #(
+    .AW(18),
+    .DW(16)
+)
+u_instruction_rom (
+    .clk        (clk),
+    .reset      (reset),
+    .read       (1'b1),
+    .write      (1'b0),
+    .address    (pc),
+    .wdata      (16'b0),
+    .wstrb      (2'b0),
+    .rdata      (instruction),
+    .sram_dq    (sram_dq  ),
+    .sram_addr  (sram_addr),
+    .sram_ub_n  (sram_ub_n),
+    .sram_lb_n  (sram_lb_n),
+    .sram_we_n  (sram_we_n),
+    .sram_ce_n  (sram_ce_n),
+    .sram_oe_n  (sram_oe_n)
+);
+`else           // Using generic ram
 ram_1rw #(
     .DW(WIDTH),
     .AW(I_AW)
@@ -140,7 +174,7 @@ u_instruction_rom(
     .wdata  (16'b0),
     .rdata  (instruction)
 );
-
+`endif
 
 // Data RAM
 ram_1rw #(

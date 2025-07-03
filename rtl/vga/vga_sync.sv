@@ -28,75 +28,88 @@ module vga_sync #(
 
     output logic [`P_SIZE-1:0]  pixel_addr, // pixel address
     output logic [`H_SIZE-1:0]  x_addr,     // pixel x coordinate
-    output logic [`V_SIZE-1:0]  y_addr      // pixel y coordinate
+    output logic [`H_SIZE-1:0]  y_addr      // pixel y coordinate
 );
 
     // ------------------------------
     // signal Declaration
     // ------------------------------
 
-    logic [`H_SIZE-1:0]   h_cnt;        // vertical counter
-    logic [`V_SIZE-1:0]   v_cnt;        // horizontal counter
+    logic [`H_SIZE-1:0]   h_count;
+    logic [`H_SIZE-1:0]   h_count_next;
+    logic [`V_SIZE-1:0]   v_count;
+    logic [`V_SIZE-1:0]   v_count_next;
 
-    logic                 h_cnt_sat;    // vertical counter saturate
-    logic                 v_cnt_sat;    // horizontal counter saturate
-    logic                 h_video_on;   // display region
-    logic                 v_video_on;   // display region
+    logic                 h_count_sat;
+    logic                 v_count_sat;
+    logic                 h_video_on;
+    logic                 v_video_on;
 
+    logic                 h_display;
+    logic                 v_display;
 
     // --------------------------------
     // Logic
     // --------------------------------
 
     // horizontal and vertical counter saturate
-    assign h_cnt_sat = (h_cnt == `H_COUNT-1) ? 1'b1 : 1'b0;
-    assign v_cnt_sat = (v_cnt == `V_COUNT-1) ? 1'b1 : 1'b0;
+    assign h_count_sat = (h_count == `H_COUNT-1) ? 1'b1 : 1'b0;
+    assign v_count_sat = (v_count == `V_COUNT-1) ? 1'b1 : 1'b0;
 
-    always @(posedge pixel_clk) begin
-        if (reset || ~vga_start) begin
-            h_cnt <= '0;
-            v_cnt <= '0;
-            vga_hsync <= '0;
-            vga_vsync <= '0;
+    always @(*) begin
+        h_count_next = h_count;
+        if (h_count_sat) h_count_next = 'b0;
+        else h_count_next = h_count + 1'b1;
+
+        // vertical counter only update when one line complete
+        v_count_next = v_count;
+        if (h_count_sat) begin
+            if (v_count_sat) v_count_next = 'b0;
+            else v_count_next = v_count_next + 1'b1;
         end
-        else begin
-            if (h_cnt_sat) h_cnt <= 'b0;
-            else h_cnt <= h_cnt + 1'b1;
 
-            if (h_cnt_sat) begin
-                if (v_cnt_sat) v_cnt <= 'b0;
-                else v_cnt <= v_cnt + 1'b1;
-            end
-
-            // generate hsync/vsync
-            vga_hsync <= (h_cnt <= `H_DISPLAY+`H_FRONT_PORCH-1) || (h_cnt >= `H_DISPLAY+`H_FRONT_PORCH+`H_SYNC_PULSE);
-            vga_vsync <= (v_cnt <= `V_DISPLAY+`V_FRONT_PORCH-1) || (v_cnt >= `V_DISPLAY+`V_FRONT_PORCH+`V_SYNC_PULSE);
-        end
     end
 
-    // display region
+    assign h_display = (h_count_next <= `H_DISPLAY-1);
+    assign v_display = (v_count_next <= `V_DISPLAY-1);
+
     always @(posedge pixel_clk) begin
         if (reset || ~vga_start) begin
+            h_count <= '0;
+            v_count <= '0;
+            vga_hsync <= '0;
+            vga_vsync <= '0;
             h_video_on <= 0;
             v_video_on <= 0;
         end
         else begin
-            h_video_on <= h_cnt <= `H_DISPLAY-1;
-            v_video_on <= v_cnt <= `V_DISPLAY-1;
+            h_count <= h_count_next;
+            v_count <= v_count_next;
+
+            vga_hsync <= (h_count_next < `H_DISPLAY+`H_FRONT_PORCH) |
+                         (h_count_next >= `H_DISPLAY+`H_FRONT_PORCH+`H_SYNC_PULSE);
+
+            vga_vsync <= (v_count_next < `V_DISPLAY+`V_FRONT_PORCH) |
+                         (v_count_next >= `V_DISPLAY+`V_FRONT_PORCH+`V_SYNC_PULSE);
+
+            h_video_on <= h_display;
+            v_video_on <= v_display;
         end
     end
+
     assign video_on = h_video_on | v_video_on;
 
     generate
 
     // generate pixel addr
     if (GEN_PIXEL_ADDR) begin: gen_pixel_addr
+        // use a dedicated counter for pixel_addr to avoid slow * operation
         always @(posedge pixel_clk) begin
             if (reset || ~vga_start) begin
                 pixel_addr <= 0;
             end
             else begin
-                if (h_video_on) begin
+                if (h_display) begin
                     if (pixel_addr == (`PIXELS-1))  pixel_addr <= 0;
                     else pixel_addr <= pixel_addr + 1;
                 end
@@ -109,17 +122,7 @@ module vga_sync #(
 
     // generate x coordinate
     if (GEN_X_ADDR) begin: gen_x_addr
-        always @(posedge pixel_clk) begin
-            if (reset || ~vga_start) begin
-                x_addr <= 0;
-            end
-            else begin
-                if (h_video_on) begin
-                    if (x_addr == (`H_DISPLAY-1))  x_addr <= 0;
-                    else x_addr <= x_addr + 1;
-                end
-            end
-        end
+        assign x_addr = h_display ? h_count : 0;
     end
     else begin: no_x_addr
         assign x_addr = 0;
@@ -127,17 +130,7 @@ module vga_sync #(
 
     // generate y coordinate
     if (GEN_Y_ADDR) begin: gen_y_addr
-        always @(posedge pixel_clk) begin
-            if (reset || ~vga_start) begin
-                y_addr <= 0;
-            end
-            else begin
-                if (v_video_on && h_cnt_sat) begin
-                    if (y_addr == (`V_DISPLAY-1)) y_addr <= 0;
-                    else y_addr <= y_addr + 1;
-                end
-            end
-        end
+        assign y_addr = v_display ? v_count : 0;
     end
     else begin: no_y_addr
         assign y_addr = 0;

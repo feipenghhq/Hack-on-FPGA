@@ -36,9 +36,6 @@ always @(posedge clk) begin
     if (write_a) begin
         ram[addr_a] <= wdata_a;
     end
-end
-
-always @(posedge clk) begin
     rdata_a <= ram[addr_a];
 end
 
@@ -47,9 +44,6 @@ always @(posedge clk) begin
     if (write_b) begin
         ram[addr_b] <= wdata_b;
     end
-end
-
-always @(posedge clk) begin
     rdata_b <= ram[addr_b];
 end
 

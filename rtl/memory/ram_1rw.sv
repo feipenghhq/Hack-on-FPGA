@@ -29,9 +29,6 @@ always @(posedge clk) begin
     if (write) begin
         ram[addr] <= wdata;
     end
-end
-
-always @(posedge clk) begin
     rdata <= ram[addr];
 end
 
