@@ -18,7 +18,7 @@ module hack_top #(
     parameter S_AW = 8          // screen ram address width
 )
 (
-    input logic                     clk,    // Need to be 27.175 as pixel clock use the same clock
+    input logic                     clk,    // Need to be 25.175 as pixel clock use the same clock
     input logic                     reset,
 
     // vga output
@@ -39,8 +39,12 @@ module hack_top #(
     output                          sram_oe_n,   // SRAM Output Enable
     `endif
 
+    // uart_host
+    output logic                    uart_txd,
+    input  logic                    uart_rxd,
+
     // error reporting
-    output logic        invalid_addressM        // invalid memory address
+    output logic                    invalid_addressM        // invalid memory address
 );
 
 localparam DATA_ADDR_END     = 16384;           // Data RAM address end (non-inclusive)
@@ -70,7 +74,7 @@ logic [WIDTH-1:0]    data_rdata;
 
 // Screen RAM
 logic                screen_sel;
-logic [S_AW-1:0]     screen_addr;   // screen ram size is 8196
+logic [WIDTH-1:0]    screen_addr;   // screen ram size is 8196, only [7:0] will be used
 logic [WIDTH-1:0]    screen_wdata;
 logic                screen_write;
 logic [WIDTH-1:0]    screen_rdata;
@@ -84,22 +88,33 @@ logic [WIDTH-1:0]    keyboard_rdata;
 // Data bus Decode
 logic [2:0]          read_data_sel;     // Select read from data/screen/keyboard
 
+// Uart Host
+logic                uart_rst_n_out;
+logic [15:0]         uart_address;
+logic                uart_wvalid;
+logic [15:0]         uart_wdata;
+logic                uart_wready;
+logic                uart_rvalid;
+logic                uart_rready;
+logic                uart_rrvalid;
+logic [15:0]         uart_rdata;
+logic                uart_host_sel;
+
+// Instruction ROM decode
+logic [17:0]         rom_address;
+logic                rom_write;
+logic [15:0]         rom_wdata;
+logic                rom_read;
+
+// cpu reset
+logic                hack_cpu_rst;
+
 /////////////////////////////////////////////////
 // Logic
 /////////////////////////////////////////////////
 
-// Hack CPU
-hack_cpu #(.WIDTH(WIDTH))
-u_hack_cpu(
-    .clk            (clk),
-    .reset          (reset),
-    .instruction    (instruction),
-    .inM            (inM),
-    .pc             (pc),
-    .addressM       (addressM),
-    .outM           (outM),
-    .writeM         (writeM)
-);
+// reset logic
+assign hack_cpu_rst = reset | ~uart_rst_n_out;
 
 // Data Bus Decode
 assign data_sel   = addressM < DATA_ADDR_END;
@@ -124,6 +139,35 @@ assign inM = ({WIDTH{read_data_sel[0]}} & keyboard_rdata) |
              ({WIDTH{read_data_sel[1]}} & screen_rdata)   |
              ({WIDTH{read_data_sel[2]}} & data_rdata);
 
+// Instruction ROM Decode
+assign uart_host_sel = uart_wvalid;
+assign uart_rready  = 1'b1;
+assign uart_rdata   = instruction;
+
+always @(posedge clk) begin
+    if (reset) uart_rrvalid <= 1'b0;
+    else uart_rrvalid <= uart_rvalid;   // read latency = 1
+end
+
+assign rom_address = uart_host_sel ? {3'b0,uart_address[15:1]} : {2'b0, pc};    // uart_address is byte address
+assign rom_write = uart_wvalid;
+assign rom_wdata = uart_wdata;
+assign rom_read  = ~uart_wvalid;    // always read the rom as long as uart host is not writing to it
+assign uart_wready = uart_host_sel;
+
+
+// Hack CPU
+hack_cpu #(.WIDTH(WIDTH))
+u_hack_cpu(
+    .clk            (clk),
+    .reset          (hack_cpu_rst),
+    .instruction    (instruction),
+    .inM            (inM),
+    .pc             (pc),
+    .addressM       (addressM),
+    .outM           (outM),
+    .writeM         (writeM)
+);
 
 // VGA controller
 hack_vga_top #(.RGB_WIDTH(RGB_WIDTH))
@@ -139,6 +183,31 @@ u_hack_vga_top (
     .ram_rdata  (vga_rdata)
 );
 
+// Uart Host
+uart_host
+#(
+    .ADDR_BYTE(2),
+    .DATA_BYTE(2),
+    .BAUD_RATE(115200),
+    .CLK_FREQ(25)
+)
+u_uart_host(
+    .clk        (clk),
+    .rst_n      (~reset),
+    .uart_txd   (uart_txd),
+    .uart_rxd   (uart_rxd),
+    .enable     (1'b1),
+    .rst_n_out  (uart_rst_n_out),
+    .address    (uart_address),
+    .wvalid     (uart_wvalid ),
+    .wdata      (uart_wdata  ),
+    .wready     (uart_wready ),
+    .rvalid     (uart_rvalid ),
+    .rready     (uart_rready ),
+    .rrvalid    (uart_rrvalid),
+    .rdata      (uart_rdata  )
+);
+
 // Instruction ROM
 `ifdef SRAM // Using onboard SRAM as instruction rom.
 sram_ctrl #(
@@ -148,11 +217,11 @@ sram_ctrl #(
 u_instruction_rom (
     .clk        (clk),
     .reset      (reset),
-    .read       (1'b1),
-    .write      (1'b0),
-    .address    (pc),
-    .wdata      (16'b0),
-    .wstrb      (2'b0),
+    .read       (rom_read),
+    .write      (rom_write),
+    .address    (rom_address),
+    .wdata      (rom_wdata),
+    .strobe     (2'b11),
     .rdata      (instruction),
     .sram_dq    (sram_dq  ),
     .sram_addr  (sram_addr),
@@ -197,17 +266,15 @@ ram_2rw #(
 u_screen_ram(
     .clk        (clk),
     // port a - cpu access
-    .addr_a     (screen_addr),
+    .addr_a     (screen_addr[7:0]),
     .write_a    (screen_write),
     .wdata_a    (screen_wdata),
     .rdata_a    (screen_rdata),
-    // port b - vga access - TBD
-    .addr_b     (vga_addr),
+    // port b - vga access
+    .addr_b     (vga_addr[7:0]),
     .write_b    (1'b0),
     .wdata_b    (16'b0),
-    /* verilator lint_off PINCONNECTEMPTY */
     .rdata_b    (vga_rdata)
-    /* verilator lint_on PINCONNECTEMPTY */
 );
 
 // Keyboard Register

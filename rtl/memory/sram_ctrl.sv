@@ -22,7 +22,7 @@ module sram_ctrl #(
     input                   write,
     input  [AW-1:0]         address,    // the address is the word address instead of byte address
     input  [DW-1:0]         wdata,
-    input  [DW/8-1:0]       wstrb,      // write strobe (byte enable)
+    input  [DW/8-1:0]       strobe,     // strobe (byte enable)
     output [DW-1:0]         rdata,
     // sram interface
     inout  [15:0]           sram_dq,     // SRAM Data bus 16 Bits
@@ -31,7 +31,7 @@ module sram_ctrl #(
     output                  sram_lb_n,   // SRAM Low-byte Data Mask
     output                  sram_we_n,   // SRAM Write Enable
     output                  sram_ce_n,   // SRAM Chip Enable
-    output                  sram_oe_n   // SRAM Output Enable
+    output                  sram_oe_n    // SRAM Output Enable
 );
 
     initial begin
@@ -49,7 +49,7 @@ module sram_ctrl #(
     reg               write_s0;
     reg  [AW-1:0]     address_s0;
     reg  [DW-1:0]     wdata_s0;
-    reg  [DW/8-1:0]   wstrb_s0;
+    reg  [DW/8-1:0]   strobe_s0;
 
     ///////////////////////////////////////////////
     //  main logic
@@ -72,7 +72,7 @@ module sram_ctrl #(
     always @(posedge clk) begin
         address_s0 <= address;
         wdata_s0 <= wdata;
-        wstrb_s0 <= wstrb;
+        strobe_s0 <= strobe;
     end
 
     // drive the sram interface
@@ -80,8 +80,8 @@ module sram_ctrl #(
     assign sram_ce_n = ~(read_s0 | write_s0);
     assign sram_oe_n = ~read_s0;
     assign sram_we_n = ~write_s0;
-    assign sram_ub_n = wstrb_s0[1];
-    assign sram_lb_n = wstrb_s0[0];
+    assign sram_ub_n = ~strobe_s0[1];
+    assign sram_lb_n = ~strobe_s0[0];
     assign sram_dq_write = wdata_s0;
     assign sram_dq_en = write_s0;
 
