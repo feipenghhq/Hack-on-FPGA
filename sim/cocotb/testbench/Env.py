@@ -20,7 +20,10 @@ class Env():
 
     def __init__(self, dut):
         self.dut = dut
-        self.rom = dut.u_instruction_rom.ram
+        try:
+            self.rom = dut.u_instruction_rom.ram
+        except AttributeError:
+            pass
         self.ram = dut.u_data_ram.ram
         self.vram = dut.u_screen_ram.ram
         self.pc = dut.u_hack_cpu.pc
@@ -75,7 +78,7 @@ class Env():
         """
         Initialize the environment: setup clock, load the hack rom and reset the design
         """
-        self.load_rom(file)
+        await self.load_rom(file)
         cocotb.start_soon(Clock(self.dut.clk, self.period, units = 'ns').start()) # clock
         await self.generate_reset()
         self.fill_vram()
@@ -93,7 +96,7 @@ class Env():
         """
         Fill vram with 0
         """
-        size = 1 << 16 # 2^16
+        size = 1 << 8 # 2^8
         for i in range(size):
             self.vram[i].value = 0
 
