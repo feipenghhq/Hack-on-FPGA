@@ -19,8 +19,10 @@
 module vga_screen_ctrl #(
     parameter RGB_WIDTH = 10
 ) (
-    input logic                     pixel_clk,
-    input logic                     reset,
+    input logic                     clk,
+    input logic                     rst_n,
+
+    input logic                     display_on,
     input logic                     vga_hsync,
     input logic                     vga_vsync,
 
@@ -33,7 +35,7 @@ module vga_screen_ctrl #(
     output logic [RGB_WIDTH-1:0]    g,
     output logic [RGB_WIDTH-1:0]    b,
 
-    output logic [15:0]             ram_addr,
+    output logic [12:0]             ram_addr,   // 8K
     input  logic [15:0]             ram_rdata
 );
 
@@ -43,7 +45,7 @@ module vga_screen_ctrl #(
 
 logic           in_hack_screen;
 logic           in_hack_screen_s1;
-logic [15:0]    pixel_addr;         // pixel address for the Hack Screen
+logic [16:0]    pixel_addr;         // pixel address for the Hack Screen
 logic [3:0]     bit_select;         // select one of the 16 bit from RAM word
 logic           color;
 
@@ -53,8 +55,8 @@ logic           color;
 /////////////////////////////////////////////////
 
 // Delay vga_hsync to match with the read latency
-always @(posedge pixel_clk) begin
-    if (reset) begin
+always @(posedge clk) begin
+    if (!rst_n) begin
         hsync <= 1'b0;
         vsync <= 1'b0;
         in_hack_screen_s1 <= 1'b0;
@@ -74,14 +76,14 @@ assign in_hack_screen = (x_addr < 512 && y_addr < 256) ? 1'b1 : 1'b0;
 /* verilator lint_off WIDTHEXPAND */
 assign pixel_addr = (x_addr + (y_addr << 9));
 /* verilator lint_on WIDTHEXPAND */
-assign ram_addr = in_hack_screen ? (pixel_addr >> 4) : 16'h0;
+assign ram_addr = in_hack_screen ? (pixel_addr[16:4]) : 13'h0;
 
 // assign RGB color based on the screen ram data.
 // each 16-bit RAM word stores 16 pixel data and bit_select indicate the desired bit in the word
 // if x, y coordinate is outside of the Hack screen, show black on the screen
 assign color = ram_rdata[bit_select];   // 0 - white, 1 - black
-assign r = (~in_hack_screen_s1 | color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
-assign g = (~in_hack_screen_s1 | color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
-assign b = (~in_hack_screen_s1 | color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
+assign r = (!in_hack_screen_s1 || !display_on || color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
+assign g = (!in_hack_screen_s1 || !display_on || color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
+assign b = (!in_hack_screen_s1 || !display_on || color) ? {{RGB_WIDTH{1'b0}}} : {{RGB_WIDTH{1'b1}}};
 
 endmodule

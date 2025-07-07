@@ -16,7 +16,7 @@ module sram_ctrl #(
     parameter DW = 16     // Input bus data width. Fixed to 16bit
 ) (
     input                   clk,
-    input                   reset,
+    input                   rst_n,
     // Request interface
     input                   read,
     input                   write,
@@ -59,7 +59,7 @@ module sram_ctrl #(
 
     // register the user bus
     always @(posedge clk) begin
-        if (reset) begin
+        if (!rst_n) begin
             read_s0 <= 0;
             write_s0 <= 0;
         end

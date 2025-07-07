@@ -69,16 +69,16 @@ class Env():
         """
         Generate reset pulses.
         """
-        self.dut.reset.value = 1
+        self.dut.rst_n.value = 0
         await Timer(5, units="ns")
-        self.dut.reset.value = 0
+        self.dut.rst_n.value = 1
         await RisingEdge(self.dut.clk)
 
     async def init(self, file:str):
         """
         Initialize the environment: setup clock, load the hack rom and reset the design
         """
-        await self.load_rom(file)
+        self.load_rom(file)
         cocotb.start_soon(Clock(self.dut.clk, self.period, units = 'ns').start()) # clock
         await self.generate_reset()
         self.fill_vram()

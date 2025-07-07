@@ -14,7 +14,7 @@ module hack_cpu #(
     parameter WIDTH = 16
 ) (
     input  logic                clk,
-    input  logic                reset,
+    input  logic                rst_n,
     input  logic [WIDTH-1:0]    instruction,    // Instruction Input
     input  logic [WIDTH-1:0]    inM,            // Memory Read Data
 
@@ -80,7 +80,7 @@ assign isC    = opcode == 1;
 
 // CPU Control State Machine
 always @(posedge clk) begin
-    if (reset) begin
+    if (!rst_n) begin
         state <= IDLE;
     end
     else begin
@@ -96,7 +96,7 @@ assign commit = (state == EXEC) ? 1'b1 : 1'b0;              // complete in EXEC1
 
 // PC
 always @(posedge clk) begin
-    if (reset) begin
+    if (!rst_n) begin
         pc <= 0;
     end
     else begin

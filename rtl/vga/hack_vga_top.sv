@@ -15,8 +15,8 @@
 module hack_vga_top #(
     parameter RGB_WIDTH = 10
 )(
-    input                           pixel_clk,
-    input                           reset,
+    input                           clk,
+    input                           rst_n,
 
     output logic                    hsync,
     output logic                    vsync,
@@ -24,18 +24,18 @@ module hack_vga_top #(
     output logic [RGB_WIDTH-1:0]    g,
     output logic [RGB_WIDTH-1:0]    b,
 
-    output logic [15:0]             ram_addr,
+    output logic [12:0]             ram_addr,
     input  logic [15:0]             ram_rdata
 );
 
 
 logic                vga_hsync;
 logic                vga_vsync;
+logic                display_on;
 
 logic [`H_SIZE-1:0]  x_addr;
 logic [`V_SIZE-1:0]  y_addr;
 
-`include "vga.svh"
 
 vga_sync #(
     .GEN_PIXEL_ADDR(0),
@@ -43,13 +43,12 @@ vga_sync #(
     .GEN_Y_ADDR(1)
 )
 u_vga_sync(
-    .pixel_clk  (pixel_clk),
-    .reset      (reset),
-    .vga_start  (1'b1),
+    .clk        (clk),
+    .rst_n      (rst_n),
     .vga_hsync  (vga_hsync),
     .vga_vsync  (vga_vsync),
 /* verilator lint_off PINCONNECTEMPTY */
-    .video_on   (),
+    .display_on (display_on),
     .pixel_addr (),
 /* verilator lint_on PINCONNECTEMPTY */
     .x_addr     (x_addr),
@@ -60,8 +59,9 @@ vga_screen_ctrl #(
     .RGB_WIDTH(RGB_WIDTH)
 )
 u_vga_screen_ctrl(
-    .pixel_clk  (pixel_clk),
-    .reset      (reset),
+    .clk  (clk),
+    .rst_n      (rst_n),
+    .display_on (display_on),
     .vga_hsync  (vga_hsync),
     .vga_vsync  (vga_vsync),
     .x_addr     (x_addr),

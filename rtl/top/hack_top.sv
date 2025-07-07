@@ -15,11 +15,12 @@ module hack_top #(
     parameter WIDTH = 16,       // data width
     parameter I_AW = WIDTH,     // instruction rom address width
     parameter D_AW = 14,        // data ram address width
-    parameter S_AW = 8          // screen ram address width
+    parameter S_AW = 13,        // screen ram address width
+    parameter FREQ = 25         // clock frequency
 )
 (
     input logic                     clk,    // Need to be 25.175 as pixel clock use the same clock
-    input logic                     reset,
+    input logic                     rst_n,
 
     // vga output
     output logic                    hsync,
@@ -74,11 +75,11 @@ logic [WIDTH-1:0]    data_rdata;
 
 // Screen RAM
 logic                screen_sel;
-logic [WIDTH-1:0]    screen_addr;   // screen ram size is 8196, only [7:0] will be used
+logic [S_AW-1:0]     screen_addr;   // screen ram size is 8196, only [7:0] will be used
 logic [WIDTH-1:0]    screen_wdata;
 logic                screen_write;
 logic [WIDTH-1:0]    screen_rdata;
-logic [WIDTH-1:0]    vga_addr;
+logic [S_AW-1:0]     vga_addr;
 logic [WIDTH-1:0]    vga_rdata;
 
 // Keyboard
@@ -106,15 +107,15 @@ logic                rom_write;
 logic [15:0]         rom_wdata;
 logic                rom_read;
 
-// cpu reset
-logic                hack_cpu_rst;
+// cpu rst_n
+logic                cpu_rst_n;
 
 /////////////////////////////////////////////////
 // Logic
 /////////////////////////////////////////////////
 
-// reset logic
-assign hack_cpu_rst = reset | ~uart_rst_n_out;
+// rst_n logic
+assign cpu_rst_n = rst_n & uart_rst_n_out;
 
 // Data Bus Decode
 assign data_sel   = addressM < DATA_ADDR_END;
@@ -124,7 +125,9 @@ assign data_write = writeM & data_sel;
 
 assign screen_sel     = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
 assign screen_wdata   = outM;
+/* verilator lint_off WIDTHTRUNC */
 assign screen_addr    = (addressM - SCREEN_ADDR_START);
+/* verilator lint_on WIDTHTRUNC */
 assign screen_write   = writeM & screen_sel;
 
 assign keyboard_sel       = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;
@@ -145,7 +148,7 @@ assign uart_rready  = 1'b1;
 assign uart_rdata   = instruction;
 
 always @(posedge clk) begin
-    if (reset) uart_rrvalid <= 1'b0;
+    if (rst_n) uart_rrvalid <= 1'b0;
     else uart_rrvalid <= uart_rvalid;   // read latency = 1
 end
 
@@ -160,7 +163,7 @@ assign uart_wready = uart_host_sel;
 hack_cpu #(.WIDTH(WIDTH))
 u_hack_cpu(
     .clk            (clk),
-    .reset          (hack_cpu_rst),
+    .rst_n          (cpu_rst_n),
     .instruction    (instruction),
     .inM            (inM),
     .pc             (pc),
@@ -172,8 +175,8 @@ u_hack_cpu(
 // VGA controller
 hack_vga_top #(.RGB_WIDTH(RGB_WIDTH))
 u_hack_vga_top (
-    .pixel_clk  (clk),
-    .reset      (reset),
+    .clk        (clk),
+    .rst_n      (rst_n),
     .hsync      (hsync),
     .vsync      (vsync),
     .r          (r),
@@ -189,11 +192,11 @@ uart_host
     .ADDR_BYTE(2),
     .DATA_BYTE(2),
     .BAUD_RATE(115200),
-    .CLK_FREQ(25)
+    .CLK_FREQ(FREQ)
 )
 u_uart_host(
     .clk        (clk),
-    .rst_n      (~reset),
+    .rst_n      (rst_n),
     .uart_txd   (uart_txd),
     .uart_rxd   (uart_rxd),
     .enable     (1'b1),
@@ -216,7 +219,7 @@ sram_ctrl #(
 )
 u_instruction_rom (
     .clk        (clk),
-    .reset      (reset),
+    .rst_n      (rst_n),
     .read       (rom_read),
     .write      (rom_write),
     .address    (rom_address),
@@ -266,12 +269,12 @@ ram_2rw #(
 u_screen_ram(
     .clk        (clk),
     // port a - cpu access
-    .addr_a     (screen_addr[7:0]),
+    .addr_a     (screen_addr[S_AW-1:0]),
     .write_a    (screen_write),
     .wdata_a    (screen_wdata),
     .rdata_a    (screen_rdata),
     // port b - vga access
-    .addr_b     (vga_addr[7:0]),
+    .addr_b     (vga_addr[S_AW-1:0]),
     .write_b    (1'b0),
     .wdata_b    (16'b0),
     .rdata_b    (vga_rdata)
