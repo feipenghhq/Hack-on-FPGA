@@ -241,9 +241,9 @@ ram_1rw #(
 )
 u_instruction_rom(
     .clk    (clk),
-    .addr   (pc),
-    .write  (1'b0),
-    .wdata  (16'b0),
+    .addr   (rom_address),
+    .write  (rom_write),
+    .wdata  (rom_wdata),
     .rdata  (instruction)
 );
 `endif

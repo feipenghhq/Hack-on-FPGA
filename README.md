@@ -6,11 +6,13 @@
   - [Hack CPU Architecture](#hack-cpu-architecture)
     - [Hack Platform](#hack-platform)
     - [Hack CPU on FPGA](#hack-cpu-on-fpga)
-  - [Supported FPGA Boards](#supported-fpga-boards)
   - [Repository Structure](#repository-structure)
+  - [Supported FPGA Boards](#supported-fpga-boards)
+  - [Try it on FPGA](#try-it-on-fpga)
+    - [Load the Jack Program to FPGA](#load-the-jack-program-to-fpga)
+    - [Program FPGA](#program-fpga)
+  - [TODO](#todo)
 
-
-(This README file is created with the help of ChatGPT and DeepSeek!)
 
 **Hack-on-FPGA** is a collection of implementations of the [Nand2Tetris](https://www.nand2tetris.org/) Hack CPU on various FPGA platforms.
 
@@ -92,10 +94,7 @@ will be available at RAM output.
 This solution only works when the memory has a **FIXED 1 CYCLE READ LATENCY**. If the read latency is more then 1 cycle
 or arbitrary, then a new solution will be needed.
 
-## Supported FPGA Boards
 
-| Board | Vendor | Toolchain | Status |
-| ----- | ------ | --------- | ------ |
 
 ## Repository Structure
 
@@ -104,7 +103,7 @@ Hack-on-FPGA
 ├── boards              // Board-specific constraints and build scripts
 ├── docs
 ├── LICENSE
-├── program             // various Jack program
+├── program             // various Jack program and script to load the program to FPGA
 ├── README.md
 ├── rtl                 // RTL source file
 │   ├── cpu             // Hack CPU
@@ -113,3 +112,46 @@ Hack-on-FPGA
 │   └── top             // Top level module
 └── software            // Jack/Hack software tool chain
 ```
+
+## Supported FPGA Boards
+
+| Board   | Vendor | Toolchain | Status                                           |
+| ------- | ------ | --------- | ------------------------------------------------ |
+| Arty A7 | Xilinx | Vivado    | Mostly Supported except for keyboard             |
+| DE2     | Altera | Quartus   | Not Supported. Not enough on-chip RAM for Memory |
+
+## Try it on FPGA
+
+### Load the Jack Program to FPGA
+
+After program the FPGA, use the following method to load the Jack program to FPGA.
+Before executing the script, update the `com_port` in `config.yaml` to the UART com port in your machine.
+
+```shell
+# Load program to FPGA
+cd program
+sudo python3 UartHost.py
+# Now under UartHost shell
+> program 0 <hack file>
+```
+
+Currently supported program:
+
+- `ScreenTest.hack`: Draw a picture in the sreen
+- `Pong.hack`: The classic pong game (run very fast)
+
+### Program FPGA
+
+#### Arty A7
+
+A Digilent PmodVGA module is required for VGA display. The PmodVGA is connected to JA/JB port. Xilinx Vivado tool is required.
+
+```shell
+cd fpga/arty/
+make pgmonly
+```
+
+## TODO
+
+- [ ] Add PS/2 module
+- [ ] Add hardware support to clear the screen to all white
