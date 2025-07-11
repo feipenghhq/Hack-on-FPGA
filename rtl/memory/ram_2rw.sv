@@ -47,11 +47,4 @@ always @(posedge clk) begin
     rdata_b <= ram[addr_b];
 end
 
-// initialize RAM to 0 for FPGA
-integer i;
-initial begin
-    for (i = 0; i < DEPTH; i=i+1)
-        ram[i] = 0;
-end
-
 endmodule

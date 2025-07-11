@@ -11,14 +11,8 @@
 // -------------------------------------------------------------------
 
 module hack_top #(
-    parameter RGB_WIDTH = 10,   // RGB width
-    parameter WIDTH = 16,       // data width
-    parameter I_AW = WIDTH,     // instruction rom address width
-    parameter D_AW = 14,        // data ram address width
-    parameter S_AW = 13,        // screen ram address width
-    parameter FREQ = 25         // clock frequency
-)
-(
+    parameter RGB_WIDTH = 10   // RGB width
+) (
     input logic                     clk,    // Need to be 25.175 as pixel clock use the same clock
     input logic                     rst_n,
 
@@ -29,7 +23,7 @@ module hack_top #(
     output logic [RGB_WIDTH-1:0]    g,
     output logic [RGB_WIDTH-1:0]    b,
 
-    `ifdef SRAM
+    `ifdef DE2
     // SRAM Interface
     inout  [15:0]                   sram_dq,     // SRAM Data bus 16 Bits
     output [17:0]                   sram_addr,   // SRAM Address bus 18 Bits
@@ -39,19 +33,25 @@ module hack_top #(
     output                          sram_ce_n,   // SRAM Chip Enable
     output                          sram_oe_n,   // SRAM Output Enable
     `endif
+    // PS/2
+    input  logic                    ps2_clk,
+    input  logic                    ps2_data,
 
     // uart_host
     output logic                    uart_txd,
-    input  logic                    uart_rxd,
-
-    // error reporting
-    output logic                    invalid_addressM        // invalid memory address
+    input  logic                    uart_rxd
 );
 
-localparam DATA_ADDR_END     = 16384;           // Data RAM address end (non-inclusive)
-localparam SCREEN_ADDR_START = 16384;           // Screen RAM address start
-localparam SCREEN_ADDR_END   = 24567;           // Screen RAM address end (non-inclusive)
-localparam KEYBOARD_ADDR     = 24567;           // Keyboard address
+localparam WIDTH = 16;                  // Hack data width
+localparam I_AW  = 15;                  // instruction rom address width - 32K x 16b
+localparam D_AW  = 14;                  // data ram address width - 16K x 16b
+localparam S_AW  = 13;                  // screen ram address width - 8K x 16b
+localparam FREQ  = 25;                  // clock frequency
+
+localparam DATA_ADDR_END     = 16384;   // Data RAM address end (non-inclusive)
+localparam SCREEN_ADDR_START = 16384;   // Screen RAM address start
+localparam SCREEN_ADDR_END   = 24576;   // Screen RAM address end (non-inclusive)
+localparam KEYBOARD_ADDR     = 24576;   // Keyboard address
 
 /////////////////////////////////////////////////
 // Signal Declaration
@@ -102,9 +102,9 @@ logic [15:0]         uart_rdata;
 logic                uart_host_sel;
 
 // Instruction ROM decode
-logic [17:0]         rom_address;
+logic [I_AW-1:0]     rom_address;
 logic                rom_write;
-logic [15:0]         rom_wdata;
+logic [WIDTH-1:0]    rom_wdata;
 logic                rom_read;
 
 // cpu rst_n
@@ -114,25 +114,28 @@ logic                cpu_rst_n;
 // Logic
 /////////////////////////////////////////////////
 
-// rst_n logic
+// cpu reset logic
+// both the main reset and the uart reset output controls cpu reset
 assign cpu_rst_n = rst_n & uart_rst_n_out;
 
-// Data Bus Decode
+// Data RAM Decode
+// Because FPGA has limited on-chip RAM, we split the Hack RAM to 3 different RAM.
+// - Data RAM = RAM[0:16383]. Implemented as 1 RW port RAM
+// - Screen RAM = RAM[16384:24566]. Implemented as 2 RW port RAM
+// - keyboard register = RAM[24567]. Implemented as a register
+// We need a decode logic to decode the bus to the 3 different ram
+
 assign data_sel   = addressM < DATA_ADDR_END;
 assign data_wdata = outM;
-assign data_addr  = addressM[13:0];
+assign data_addr  = addressM[D_AW-1:0];
 assign data_write = writeM & data_sel;
 
-assign screen_sel     = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
-assign screen_wdata   = outM;
-/* verilator lint_off WIDTHTRUNC */
-assign screen_addr    = (addressM - SCREEN_ADDR_START);
-/* verilator lint_on WIDTHTRUNC */
-assign screen_write   = writeM & screen_sel;
+assign screen_sel    = (addressM >= SCREEN_ADDR_START) & (addressM < SCREEN_ADDR_END);
+assign screen_wdata  = outM;
+assign screen_addr   = (addressM - SCREEN_ADDR_START);
+assign screen_write  = writeM & screen_sel;
 
-assign keyboard_sel       = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;
-
-assign invalid_addressM   = ~(data_sel | screen_sel | keyboard_sel);
+assign keyboard_sel  = (addressM == KEYBOARD_ADDR) ? 1'b1 : 1'b0;
 
 always @(posedge clk) begin
     read_data_sel <= {data_sel, screen_sel, keyboard_sel};
@@ -146,18 +149,16 @@ assign inM = ({WIDTH{read_data_sel[0]}} & keyboard_rdata) |
 assign uart_host_sel = uart_wvalid;
 assign uart_rready  = 1'b1;
 assign uart_rdata   = instruction;
-
+assign uart_wready = uart_host_sel;
 always @(posedge clk) begin
     if (rst_n) uart_rrvalid <= 1'b0;
     else uart_rrvalid <= uart_rvalid;   // read latency = 1
 end
 
-assign rom_address = uart_host_sel ? {3'b0,uart_address[15:1]} : {2'b0, pc};    // uart_address is byte address
-assign rom_write = uart_wvalid;
-assign rom_wdata = uart_wdata;
-assign rom_read  = ~uart_wvalid;    // always read the rom as long as uart host is not writing to it
-assign uart_wready = uart_host_sel;
-
+assign rom_address = uart_host_sel ? {uart_address[15:1]} : pc[I_AW-1:0]; // uart_address is byte address
+assign rom_write   = uart_wvalid;
+assign rom_wdata   = uart_wdata;
+assign rom_read    = ~uart_wvalid;
 
 // Hack CPU
 hack_cpu #(.WIDTH(WIDTH))
@@ -212,7 +213,9 @@ u_uart_host(
 );
 
 // Instruction ROM
-`ifdef SRAM // Using onboard SRAM as instruction rom.
+
+`ifdef DE2 // For DE2 FPGA Board, Using onboard SRAM as instruction rom.
+
 sram_ctrl #(
     .AW(18),
     .DW(16)
@@ -222,7 +225,7 @@ u_instruction_rom (
     .rst_n      (rst_n),
     .read       (rom_read),
     .write      (rom_write),
-    .address    (rom_address),
+    .address    ({2'b0, rom_address}),
     .wdata      (rom_wdata),
     .strobe     (2'b11),
     .rdata      (instruction),
@@ -234,7 +237,9 @@ u_instruction_rom (
     .sram_ce_n  (sram_ce_n),
     .sram_oe_n  (sram_oe_n)
 );
-`else           // Using generic ram
+
+`else // Using FPGA on-chip RAM
+
 ram_1rw #(
     .DW(WIDTH),
     .AW(I_AW)
@@ -246,6 +251,7 @@ u_instruction_rom(
     .wdata  (rom_wdata),
     .rdata  (instruction)
 );
+
 `endif
 
 // Data RAM
@@ -269,19 +275,25 @@ ram_2rw #(
 u_screen_ram(
     .clk        (clk),
     // port a - cpu access
-    .addr_a     (screen_addr[S_AW-1:0]),
+    .addr_a     (screen_addr),
     .write_a    (screen_write),
     .wdata_a    (screen_wdata),
     .rdata_a    (screen_rdata),
     // port b - vga access
-    .addr_b     (vga_addr[S_AW-1:0]),
+    .addr_b     (vga_addr),
     .write_b    (1'b0),
     .wdata_b    (16'b0),
     .rdata_b    (vga_rdata)
 );
 
 // Keyboard Register
-// TBD
-assign keyboard_rdata = 0;
+keyboard
+u_keyboard(
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .ps2_clk    (ps2_clk),
+    .ps2_data   (ps2_data),
+    .value      (keyboard_rdata)
+);
 
 endmodule

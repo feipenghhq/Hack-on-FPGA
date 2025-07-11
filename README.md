@@ -9,40 +9,38 @@
   - [Repository Structure](#repository-structure)
   - [Supported FPGA Boards](#supported-fpga-boards)
   - [Try it on FPGA](#try-it-on-fpga)
-    - [Load the Jack Program to FPGA](#load-the-jack-program-to-fpga)
-    - [Program FPGA](#program-fpga)
-  - [TODO](#todo)
+    - [Load a Jack Program](#load-a-jack-program)
+    - [Programming the FPGA](#programming-the-fpga)
 
 
-**Hack-on-FPGA** is a collection of implementations of the [Nand2Tetris](https://www.nand2tetris.org/) Hack CPU on various FPGA platforms.
+**Hack-on-FPGA** is a collection of implementations of the [Nand2Tetris](https://www.nand2tetris.org/) Hack CPU for various FPGA platforms.
 
 ## Overview
 
-The Hack CPU is a simple 16-bit processor introduced in the Nand2Tetris course.
-It supports a minimal instruction set and a Harvard architecture.
-This project implements the Hack CPU using hardware description languages (HDLs) and deploys it to multiple FPGA boards.
+The Hack CPU is a 16-bit processor introduced in the Nand2Tetris course. It supports a minimal instruction set and Harvard architecture.
+
+This project reimplements the Hack CPU in Verilog (HDL), adapted for real-world FPGA boards, and extends the system to support VGA and keyboard I/O.
 
 ## Motivation
 
-Make the Hack CPU more fun and enjoy it in the read hardware!
+Bring the Hack CPU to life on physical FPGA hardware — for fun, learning, and experimentation.
 
 ## Hack CPU Architecture
 
-The original Hack CPU Architecture can be found in the nand2tetris website [Lecture 5 Computer Architecture](https://drive.google.com/file/d/1Z_fxYmmRNXTkAzmZ6YMoX9NXZIRVCKiw/view). It is modified to make it suitable for FPGA implementation.
-
+The Hack CPU design in this repository is based on the [Nand2Tetris Computer Architecture](https://drive.google.com/file/d/1Z_fxYmmRNXTkAzmZ6YMoX9NXZIRVCKiw/view), with modifications to better suit FPGA implementation constraints.
 
 ### Hack Platform
 
 ![Hack_Platform](./docs/assets/Hack_Platform_Diagram.drawio.png)
 
-- Uart Controller: Programs the Instruction ROM and control the Hack CPU
-- Instruction ROM: Store the program instruction
-- Hack CPU: The Hack CPU
-- Data RAM: Store the data portion (Memory[0:16383])
-- Screen RAM: Store the data portion (Memory[16384:24479])
-- Keyboard Register: Store the keyboard Scancode (Memory[24576])
-- VGA: VGA controller
-- PS2: PS2 keyboard controller
+- Instruction ROM: Store Hack instruction
+- Hack CPU: The Hack processor.
+- Data RAM: Store the data portion `RAM[0:16383]`
+- Screen RAM: Store the data portion `RAM[16384:24575]`
+- Uart Controller: Load hack program
+- Keyboard Register: Store the current key code at `RAM[24576]`
+- VGA Controller: Generates VGA output.
+- PS2 keyboard controller: Interfaces with a PS2 keyboard.
 
 ### Hack CPU on FPGA
 
@@ -51,107 +49,94 @@ Here is the Hack CPU Design for FPGA:
 ![Hack_CPU](./docs/assets/Hack_CPU_Diagram_FPGA.drawio.png)
 
 The Hack CPU consist of the following components:
-- ALU: Responsible for performing the logic and arithmetic computation
-- A Register
-- D Register
-- I Register: Hold the current instruction in case of stall
-- PC: Program Counter
-- Control: State Machine Controlling the CPU
+- ALU: Responsible for performing the logic and arithmetic computation.
+- A Register, D Register: Standard Hack CPU register.
+- PC (Program Counter): Tracks instruction location.
+- Control: A Finite State Machine managing CPU states.
 
-Compared to the original Nand2Tetris Hack CPU, there are two new components: *Control* block and *I Register + MUX*.
-They are introduced to accommodate FPGA design.
+Additional components such as the **Control FSM** and **I Register** were added to accommodate synchronous memory in FPGA.
 
-#### Async Memory and Sync Memory
+#### Async vs. Sync Memory
 
-The Nand2Tetris Course, the RAM and ROM are implemented as asynchronous and the read data is returned in the same
-clock However, in FPGA, most of the RAM are implemented as synchronous RAM (BRAM), and data is returned in the next cycle.
-This have two impact on the current Hack CPU design:
+In the Nand2Tetris course, ROM and RAM behave as asynchronous memory - data is returned in the same clock cycle.
+However, most FPGA RAMs (e.g., BRAM) are synchronous: data is returned in the next clock cycle.
 
-1. The Instruction corresponding to the current PC will return at the next clock cycle.
-2. The memory read data will return at the next clock cycle.
-
-The original Hack CPU design needs to be modified to accommodate the above impacts.
+This has two implications:
+1. Instruction fetched from ROM becomes available one cycle after the PC is issued.
+2. Data read from RAM also returns one cycle later.
 
 #### CPU Control State Machine
 
-In order to solve the above issue, we will use a state machine to control the CPU and make it a "multi-cycle" CPU.
-
-The CPU contains 3 states IDLE, Fetch, and EXEC:
+To handle sync memory, the CPU uses a three-state FSM (Finite State Machine):
 
 | State | Meaning                            |
 | ----- | ---------------------------------- |
-| IDLE  | CPU under reset                    |
+| IDLE  | CPU in reset state                 |
 | FETCH | Fetch the instruction from the ROM |
 | EXEC  | Execute the instruction            |
 
-For Instruction Fetch, CPU will access the Instruction ROM in the *FETCH* state and the instruction will come back at
-*EXEC* stage. CPU can start executing the instruction in *EXEC* stage.
-
-For Memory Read, since the A register is updated to the new value at the beginning of the *FETCH* state, this will set
-the RAM address to a new value and start accessing the RAM implicitly. When CPU switch to *EXEC* stage, the read data
-will be available at RAM output.
-
-This solution only works when the memory has a **FIXED 1 CYCLE READ LATENCY**. If the read latency is more then 1 cycle
-or arbitrary, then a new solution will be needed.
-
-
+- During `FETCH`, the instruction is loaded from ROM.
+- `A` register specific the RAM address in `FETCH` state and the RAM data is available in `EXEC` state
+- In `EXEC`, the instruction is executed and RAM output becomes valid.
+- This approach assumes fixed 1-cycle latency memory. For longer or variable latency, further changes are required.
 
 ## Repository Structure
 
 ```
 Hack-on-FPGA
-├── boards              // Board-specific constraints and build scripts
+├── boards              // Board-specific build scripts and constraints
 ├── docs
 ├── LICENSE
-├── program             // various Jack program and script to load the program to FPGA
+├── program             // Sample Jack programs + UART load script
 ├── README.md
-├── rtl                 // RTL source file
-│   ├── cpu             // Hack CPU
-│   ├── memory          // RAM and ROM module
-│   ├── peripherals     // Peripherals devices
+├── rtl                 // RTL design file
+│   ├── cpu             // Hack CPU Core
+│   ├── memory          // RAM/ROM module
+│   ├── vga             // VGA
+│   ├── uart            // UART
 │   └── top             // Top level module
 └── software            // Jack/Hack software tool chain
 ```
 
 ## Supported FPGA Boards
 
-| Board   | Vendor | Toolchain | Status                                           |
-| ------- | ------ | --------- | ------------------------------------------------ |
-| Arty A7 | Xilinx | Vivado    | Mostly Supported except for keyboard             |
-| DE2     | Altera | Quartus   | Not Supported. Not enough on-chip RAM for Memory |
+| Board   | Vendor | Toolchain | Status                                   |
+| ------- | ------ | --------- | ---------------------------------------- |
+| Arty A7 | Xilinx | Vivado    | Mostly Supported except for keyboard     |
+| DE2     | Altera | Quartus   | Not Supported - insufficient on-chip RAM |
 
 ## Try it on FPGA
 
-### Load the Jack Program to FPGA
+### Load a Jack Program
 
-After program the FPGA, use the following method to load the Jack program to FPGA.
-Before executing the script, update the `com_port` in `config.yaml` to the UART com port in your machine.
+After program the FPGA, load a `.hack` program using the UART Host script.
+
+- Config the `com_port` in `config.yaml`
+- Run the `UartHost.py` script to enter UART Shell:
 
 ```shell
-# Load program to FPGA
 cd program
 sudo python3 UartHost.py
-# Now under UartHost shell
+```
+
+In the UART Shell:
+
+```shell
 > program 0 <hack file>
 ```
 
-Currently supported program:
+**Available Programs:**
 
-- `ScreenTest.hack`: Draw a picture in the sreen
-- `Pong.hack`: The classic pong game (run very fast)
+- `ScreenTest.hack`: Draw a simple image on screen.
+- `Pong.hack`: Classic Pong game (run very fast).
 
-### Program FPGA
+### Programming the FPGA
 
 #### Arty A7
 
-A Digilent PmodVGA module is required for VGA display. The PmodVGA is connected to JA/JB port. Xilinx Vivado tool is required.
+- Requires the Digilent PmodVGA module (connected to JA/JB)
 
 ```shell
 cd fpga/arty/
 make pgmonly
 ```
-
-## TODO
-
-- [ ] Add PS/2 module
-- [ ] Add hardware support to clear the screen to all white
