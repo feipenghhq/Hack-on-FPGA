@@ -12,12 +12,8 @@
 
 module top
 (
-    //input         CLOCK_50,    // 50 MHz
-    input         CLOCK_27,     // 50 MHz
-
+    input         CLOCK_50,    // 50 MHz
     input         KEY,          // Pushbutton[3:0]
-
-    output        TD_RESET,     // TV Decoder Reset. Low active
 
     // VGA
     output        VGA_CLK,     // VGA Clock
@@ -29,6 +25,14 @@ module top
     output [9:0]  VGA_G,       // VGA Green[9:0]
     output [9:0]  VGA_B,       // VGA Blue[9:0]
 
+    // UART
+    input         UART_RXD,
+    output        UART_TXD,
+
+    // PS/2
+    input         PS2_CLK,
+    input         PS2_DAT,
+
     // SRAM Interface
     inout  [15:0] SRAM_DQ,     // SRAM Data bus 16 Bits
     output [17:0] SRAM_ADDR,   // SRAM Address bus 18 Bits
@@ -39,25 +43,21 @@ module top
     output        SRAM_OE_N    // SRAM Output Enable
 );
 
-logic PIXEL_CLK;
-
 assign VGA_BLANK = 1'b1;
 assign VGA_SYNC  = 1'b0;
-assign VGA_CLK = ~PIXEL_CLK;
-assign TD_RESET = 1'b1;
 
 pll
 u_pll (
-    .inclk0 (CLOCK_27),
-	.c0     (PIXEL_CLK)
+    .inclk0 (CLOCK_50),
+	.c0     (VGA_CLK)
 );
 
 hack_top
     #(.RGB_WIDTH(10))
 u_hack_top
 (
-    .clk        (PIXEL_CLK),
-    .reset      (~KEY),     // default is high
+    .clk        (VGA_CLK),
+    .rst_n      (KEY),
     .r          (VGA_R),
     .g          (VGA_G),
     .b          (VGA_B),
@@ -70,7 +70,10 @@ u_hack_top
     .sram_we_n  (SRAM_WE_N),
     .sram_ce_n  (SRAM_CE_N),
     .sram_oe_n  (SRAM_OE_N),
-    .invalid_addressM()
+    .ps2_clk    (PS2_CLK),
+    .ps2_data   (PS2_DAT),
+    .uart_txd   (UART_TXD),
+    .uart_rxd   (UART_RXD)
 );
 
 endmodule

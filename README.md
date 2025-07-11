@@ -104,6 +104,7 @@ Hack-on-FPGA
 | ------- | ------ | --------- | ---------------------------------------- |
 | Arty A7 | Xilinx | Vivado    | Mostly Supported except for keyboard     |
 | DE2     | Altera | Quartus   | Not Supported - insufficient on-chip RAM |
+| DE2-115 | Altera | Quartus   | Fully Supported                          |
 
 ## Try it on FPGA
 

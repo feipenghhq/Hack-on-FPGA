@@ -21,7 +21,7 @@ create_clock -name {CLOCK_50} -period 20 [get_ports {CLOCK_50}]
 #**************************************************************
 
 #derive_pll_clocks -create_base_clocks
-create_generated_clock -name {VGA_CLK} -source [get_ports CLOCK_50] -divide_by 2 [get_pins u_pll|altpll_component|pll|clk[0]]
+create_generated_clock -name {VGA_CLK} -source [get_ports CLOCK_50] -divide_by 2 [get_pins u_pll|altpll_component|auto_generated|pll1|clk[0]]
 
 #**************************************************************
 # Set Clock Latency
@@ -74,16 +74,7 @@ derive_clock_uncertainty
 # Set Input Delay
 #**************************************************************
 
-set_input_delay -clock VGA_CLK 10 [get_ports SRAM_DQ[*]]
 
 #**************************************************************
 # Set Output Delay
 #**************************************************************
-
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_DQ[*] ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_ADDR[*] ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_UB_N ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_LB_N ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_WE_N ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_CE_N ]
-set_output_delay -clock VGA_CLK 10 [get_ports SRAM_OE_N ]

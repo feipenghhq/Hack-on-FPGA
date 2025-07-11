@@ -14,9 +14,9 @@ SCRIPT_DIR 	= $(GIT_ROOT)/scripts/quartus
 #########################################################
 
 # device part
-PART ?= EP2C35F672C7
+PART ?=
 # device family
-FAMILY ?= Cyclone II
+FAMILY ?=
 # project name
 PROJECT ?=
 # top level name

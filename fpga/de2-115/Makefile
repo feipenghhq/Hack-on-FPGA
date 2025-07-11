@@ -3,9 +3,9 @@ GIT_ROOT 	= $(shell git rev-parse --show-toplevel)
 SCRIPT_DIR 	= $(GIT_ROOT)/scripts/quartus
 
 # device part
-PART = EP2C35F672C7
+PART = EP4CE115F29C8
 # device family
-FAMILY = Cyclone II
+FAMILY = "Cyclone IV E"
 # project name
 PROJECT = hack
 # top level name
@@ -29,17 +29,17 @@ VERILOG += $(GIT_ROOT)/rtl/keyboard/ps2_host.sv
 VERILOG += $(GIT_ROOT)/rtl/keyboard/ps2_scancode2hack.sv
 VERILOG += $(GIT_ROOT)/rtl/keyboard/keyboard.sv
 VERILOG += $(GIT_ROOT)/rtl/top/hack_top.sv
-VERILOG += $(GIT_ROOT)/fpga/de2/pll.v
-VERILOG += $(GIT_ROOT)/fpga/de2/top.sv
+VERILOG += $(GIT_ROOT)/fpga/de2-115/pll.v
+VERILOG += $(GIT_ROOT)/fpga/de2-115/top.sv
 # verilog include directory
-SEARCH  += $(GIT_ROOT)/rtl/vga
+SEARCH += $(GIT_ROOT)/rtl/vga
 # verilog define
-DEFINE = DE2
+DEFINE =
 # sdc files
 SDC	= $(PWD)/timing.sdc
 # pin assignment files
 PIN = $(PWD)/pin.tcl
 # project output directory
-OUT_DIR ?= outputs
+OUT_DIR = outputs
 
 include $(GIT_ROOT)/scripts/quartus/makefile.mk

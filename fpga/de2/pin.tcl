@@ -2,11 +2,7 @@
 set_location_assignment PIN_G26 -to KEY
 
 # CLOCK
-#set_location_assignment PIN_N2 -to CLOCK_50
-set_location_assignment PIN_D13 -to CLOCK_27
-
-# TD_RESET
-set_location_assignment PIN_C4 -to TD_RESET
+set_location_assignment PIN_N2 -to CLOCK_50
 
 # VGA
 set_location_assignment PIN_C8 -to VGA_R[0]
@@ -85,3 +81,11 @@ set_location_assignment PIN_AD10 -to SRAM_OE_N
 set_location_assignment PIN_AF9 -to SRAM_UB_N
 set_location_assignment PIN_AE9 -to SRAM_LB_N
 set_location_assignment PIN_AC11 -to SRAM_CE_N
+
+# UART
+set_location_assignment PIN_C25 -to UART_RXD
+set_location_assignment PIN_B25 -to UART_TXD
+
+# PS2
+set_location_assignment PIN_D26 -to PS2_CLK
+set_location_assignment PIN_C24 -to PS2_DAT
